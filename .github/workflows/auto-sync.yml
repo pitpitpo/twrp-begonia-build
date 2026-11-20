@@ -1,0 +1,37 @@
+name: Upstream Sync
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily at midnight UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync with Upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Sync from Upstream
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          if gh repo sync "${{ github.repository }}" -b "${{ github.ref_name }}" 2>/dev/null; then
+            echo "Successfully synced using gh repo sync."
+          else
+            echo "Direct gh repo sync not applicable or failed, falling back to git remote sync..."
+            UPSTREAM_URL="https://gitlab.com/methylphetamine/twrp-begonia-build.git"
+            git remote add upstream "$UPSTREAM_URL" 2>/dev/null || git remote set-url upstream "$UPSTREAM_URL"
+            git fetch upstream "${{ github.ref_name }}"
+            git merge --no-edit "upstream/${{ github.ref_name }}" || git merge --strategy-option=theirs --no-edit "upstream/${{ github.ref_name }}"
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
